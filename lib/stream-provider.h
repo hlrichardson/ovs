@@ -30,6 +30,7 @@ struct stream {
     int state;
     int error;
     char *name;
+    const char *peer_id;
 };
 
 void stream_init(struct stream *, const struct stream_class *,
@@ -38,6 +39,17 @@ static inline void stream_assert_class(const struct stream *stream,
                                        const struct stream_class *class)
 {
     ovs_assert(stream->class == class);
+}
+
+static inline void stream_set_peer_id(struct stream *stream,
+                                      const char *peer_id)
+{
+    stream->peer_id = peer_id; 
+}
+
+static inline const char *stream_get_peer_id(const struct stream *stream)
+{
+    return stream->peer_id; 
 }
 
 struct stream_class {
