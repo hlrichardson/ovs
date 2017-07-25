@@ -81,6 +81,7 @@ Christoph Jaeger                cj@linux.com
 Chris Wright                    chrisw@sous-sol.org
 Chuck Short                     zulcss@ubuntu.com
 Ciara Loftus                    ciara.loftus@intel.com
+Clint Byrum                     clint@fewbar.com
 Cong Wang                       amwang@redhat.com
 Conner Herriges                 conner.herriges@ibm.com
 Damien Millescamps              damien.millescamps@6wind.com
@@ -158,6 +159,7 @@ Jan Scheurich                   jan.scheurich@ericsson.com
 Jan Vansteenkiste               jan@vstone.eu
 Jarno Rajahalme                 jarno@ovn.org
 Jason Kölker                    jason@koelker.net
+Jason Wessel                    jason.wessel@windriver.com
 Jasper Capel                    jasper@capel.tv
 Jean Tourrilhes                 jt@hpl.hp.com
 Jeremy Stribling                strib@nicira.com
@@ -310,7 +312,9 @@ Tsvi Slonim                     tsvi@toroki.com
 Tuan Nguyen                     tuan.nguyen@veriksystems.com
 Tyler Coumbes                   coumbes@gmail.com
 Tony van der Peet               tony.vanderpeet@alliedtelesis.co.nz
+Tonghao Zhang                   xiangxia.m.yue@gmail.com
 Valient Gough                   vgough@pobox.com
+Venkata Anil Kommaddi           vkommadi@redhat.com
 Vivien Bernet-Rollande          vbr@soprive.net
 Wang Sheng-Hui                  shhuiw@gmail.com
 Wei Li                          liw@dtdream.com
@@ -333,13 +337,16 @@ Zongkai LI                      zealokii@gmail.com
 Zhi Yong Wu                     zwu.kernel@gmail.com
 Zang MingJie                    zealot0630@gmail.com
 Zhenyu Gao                      sysugaozhenyu@gmail.com
-nickcooper-zhangtonghao         nickcooper-zhangtonghao@opencloud.tech
+ZhiPeng Lu                      lu.zhipeng@zte.com.cn
+Zhou Yangchao                   1028519445@qq.com
 wenxu                           wenxu@ucloud.cn
 wisd0me                         ak47izatool@gmail.com
 xushengping                     shengping.xu@huawei.com
 yinpeijun                       yinpeijun@huawei.com
 zangchuanqiang                  zangchuanqiang@huawei.com
 zhaojingjing                    zhao.jingjing1@zte.com.cn
+zhongbaisong                    zhongbaisong@huawei.com
+zhaozhanxu                      zhaozhanxu@163.com
 =============================== ===============================================
 
 The following additional people are mentioned in commit logs as having
@@ -445,6 +452,7 @@ John Darrington                 john@darrington.wattle.id.au
 John Galgay                     john@galgay.net
 John Hurley                     john.hurley@netronome.com
 John Reumann                    nofutznetworks@gmail.com
+Karthik Sundaravel              ksundara@redhat.com
 Kashyap Thimmaraju              kashyap.thimmaraju@sec.t-labs.tu-berlin.de
 Keith Holleman                  hollemanietf@gmail.com
 Kevin Lin                       kevinlin@berkeley.edu

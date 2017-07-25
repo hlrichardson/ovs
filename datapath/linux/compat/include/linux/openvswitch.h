@@ -290,8 +290,9 @@ enum ovs_vport_attr {
 
 enum {
 	OVS_VXLAN_EXT_UNSPEC,
-	OVS_VXLAN_EXT_GBP,      /* Flag or __u32 */
-	OVS_VXLAN_EXT_GPE = 8,  /* Flag or __u32 */
+	OVS_VXLAN_EXT_GBP,
+	/* place new values here to fill gap. */
+	OVS_VXLAN_EXT_GPE = 8,
 	__OVS_VXLAN_EXT_MAX,
 };
 
@@ -365,7 +366,11 @@ enum ovs_key_attr {
 	OVS_KEY_ATTR_TUNNEL_INFO,  /* struct ovs_tunnel_info */
 #endif
 
+#ifndef __KERNEL__
+	/* Only used within userspace data path. */
 	OVS_KEY_ATTR_PACKET_TYPE,  /* be32 packet type */
+#endif
+
 	__OVS_KEY_ATTR_MAX
 };
 
@@ -714,8 +719,8 @@ struct ovs_action_hash {
  * this header to build final header according to actual packet parameters.
  */
 struct ovs_action_push_tnl {
-	uint32_t tnl_port;
-	uint32_t out_port;
+	odp_port_t tnl_port;
+	odp_port_t out_port;
 	uint32_t header_len;
 	uint32_t tnl_type;     /* For logging. */
 	uint32_t header[TNL_PUSH_HEADER_SIZE / 4];
@@ -837,8 +842,8 @@ enum ovs_nat_attr {
  * is copied from the value to the packet header field, rest of the bits are
  * left unchanged.  The non-masked value bits must be passed in as zeroes.
  * Masking is not supported for the %OVS_KEY_ATTR_TUNNEL attribute.
- * @OVS_ACTION_RECIRC: Recirculate within the data path.
- * @OVS_ACTION_HASH: Compute and set flow hash value.
+ * @OVS_ACTION_ATTR_RECIRC: Recirculate within the data path.
+ * @OVS_ACTION_ATTR_HASH: Compute and set flow hash value.
  * @OVS_ACTION_ATTR_PUSH_MPLS: Push a new MPLS label stack entry onto the
  * top of the packets MPLS label stack.  Set the ethertype of the
  * encapsulating frame to either %ETH_P_MPLS_UC or %ETH_P_MPLS_MC to

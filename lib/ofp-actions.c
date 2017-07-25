@@ -635,27 +635,29 @@ parse_OUTPUT(const char *arg,
 
         output_trunc = ofpact_put_OUTPUT_TRUNC(ofpacts);
         return parse_truncate_subfield(output_trunc, arg, port_map);
-    } else {
-        struct mf_subfield src;
-        char *error = mf_parse_subfield(&src, arg);
-        if (!error) {
-            struct ofpact_output_reg *output_reg;
+    }
 
-            output_reg = ofpact_put_OUTPUT_REG(ofpacts);
-            output_reg->max_len = UINT16_MAX;
-            output_reg->src = src;
-        } else {
-            free(error);
-            struct ofpact_output *output;
-
-            output = ofpact_put_OUTPUT(ofpacts);
-            if (!ofputil_port_from_string(arg, port_map, &output->port)) {
-                return xasprintf("%s: output to unknown port", arg);
-            }
-            output->max_len = output->port == OFPP_CONTROLLER ? UINT16_MAX : 0;
-        }
+    ofp_port_t port;
+    if (ofputil_port_from_string(arg, port_map, &port)) {
+        struct ofpact_output *output = ofpact_put_OUTPUT(ofpacts);
+        output->port = port;
+        output->max_len = output->port == OFPP_CONTROLLER ? UINT16_MAX : 0;
         return NULL;
     }
+
+    struct mf_subfield src;
+    char *error = mf_parse_subfield(&src, arg);
+    if (!error) {
+        struct ofpact_output_reg *output_reg;
+
+        output_reg = ofpact_put_OUTPUT_REG(ofpacts);
+        output_reg->max_len = UINT16_MAX;
+        output_reg->src = src;
+        return NULL;
+    }
+    free(error);
+
+    return xasprintf("%s: output to unknown port", arg);
 }
 
 static void
@@ -4539,12 +4541,14 @@ learn_min_len(uint16_t header)
 
 static enum ofperr
 decode_LEARN_common(const struct nx_action_learn *nal,
+                    enum ofp_raw_action_type raw,
                     struct ofpact_learn *learn)
 {
     if (nal->pad) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
+    learn->ofpact.raw = raw;
     learn->idle_timeout = ntohs(nal->idle_timeout);
     learn->hard_timeout = ntohs(nal->hard_timeout);
     learn->priority = ntohs(nal->priority);
@@ -4656,7 +4660,7 @@ decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
 
     learn = ofpact_put_LEARN(ofpacts);
 
-    error = decode_LEARN_common(nal, learn);
+    error = decode_LEARN_common(nal, NXAST_RAW_LEARN, learn);
     if (error) {
         return error;
     }
@@ -4687,7 +4691,7 @@ decode_NXAST_RAW_LEARN2(const struct nx_action_learn2 *nal,
     }
 
     learn = ofpact_put_LEARN(ofpacts);
-    error = decode_LEARN_common(&nal->up, learn);
+    error = decode_LEARN_common(&nal->up, NXAST_RAW_LEARN2, learn);
     if (error) {
         return error;
     }
@@ -7614,7 +7618,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         if (!mf_are_prereqs_ok(mf, flow, NULL) ||
             (mf->id == MFF_VLAN_VID &&
              !(flow->vlans[0].tci & htons(VLAN_CFI)))) {
-            VLOG_WARN_RL(&rl, "set_field %s lacks correct prerequisities",
+            VLOG_WARN_RL(&rl, "set_field %s lacks correct prerequisites",
                          mf->name);
             return OFPERR_OFPBAC_MATCH_INCONSISTENT;
         }

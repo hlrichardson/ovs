@@ -1517,6 +1517,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
                                                      \
     GET_FEATURES,                                    \
     NULL, /* set_advertisement */                    \
+    NULL, /* get_pt_mode */                          \
     NULL, /* set_policing */                         \
     NULL, /* get_qos_type */                         \
     NULL, /* get_qos_capabilities */                 \
@@ -1548,6 +1549,8 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     netdev_bsd_rxq_recv,                             \
     netdev_bsd_rxq_wait,                             \
     netdev_bsd_rxq_drain,                            \
+                                                     \
+    NO_OFFLOAD_API                                   \
 }
 
 const struct netdev_class netdev_bsd_class =

@@ -1357,6 +1357,7 @@ CHECK_FEATURE__(ct_label, ct_label, ct_label.u64.lo, 1, ETH_TYPE_IP)
 CHECK_FEATURE__(ct_state_nat, ct_state, ct_state, \
                 CS_TRACKED|CS_SRC_NAT, ETH_TYPE_IP)
 CHECK_FEATURE__(ct_orig_tuple, ct_orig_tuple, ct_nw_proto, 1, ETH_TYPE_IP)
+CHECK_FEATURE__(ct_orig_tuple6, ct_orig_tuple6, ct_nw_proto, 1, ETH_TYPE_IPV6)
 
 #undef CHECK_FEATURE
 #undef CHECK_FEATURE__
@@ -1387,6 +1388,7 @@ check_support(struct dpif_backer *backer)
 
     backer->support.odp.ct_state_nat = check_ct_state_nat(backer);
     backer->support.odp.ct_orig_tuple = check_ct_orig_tuple(backer);
+    backer->support.odp.ct_orig_tuple6 = check_ct_orig_tuple6(backer);
 }
 
 static int
@@ -2759,7 +2761,7 @@ set_rstp_port(struct ofport *ofport_,
     rstp_port_set(rp, s->port_num, s->priority, s->path_cost,
                   s->admin_edge_port, s->auto_edge,
                   s->admin_p2p_mac_state, s->admin_port_state, s->mcheck,
-                  ofport);
+                  ofport, netdev_get_name(ofport->up.netdev));
     update_rstp_port_state(ofport);
     /* Synchronize operational status. */
     rstp_port_set_mac_operational(rp, ofport->may_enable);
@@ -2893,7 +2895,7 @@ bundle_update(struct ofbundle *bundle)
     bundle->floodable = true;
     LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
         if (port->up.pp.config & OFPUTIL_PC_NO_FLOOD
-            || netdev_vport_is_layer3(port->up.netdev)
+            || netdev_get_pt_mode(port->up.netdev) == NETDEV_PT_LEGACY_L3
             || (bundle->ofproto->stp && !stp_forward_in_state(port->stp_state))
             || (bundle->ofproto->rstp && !rstp_forward_in_state(port->rstp_state))) {
             bundle->floodable = false;
@@ -2942,7 +2944,7 @@ bundle_add_port(struct ofbundle *bundle, ofp_port_t ofp_port,
         port->bundle = bundle;
         ovs_list_push_back(&bundle->ports, &port->bundle_node);
         if (port->up.pp.config & OFPUTIL_PC_NO_FLOOD
-            || netdev_vport_is_layer3(port->up.netdev)
+            || netdev_get_pt_mode(port->up.netdev) == NETDEV_PT_LEGACY_L3
             || (bundle->ofproto->stp && !stp_forward_in_state(port->stp_state))
             || (bundle->ofproto->rstp && !rstp_forward_in_state(port->rstp_state))) {
             bundle->floodable = false;
@@ -4264,7 +4266,7 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
      * the features we know of. */
     if (support->ct_state && support->ct_zone && support->ct_mark
         && support->ct_label && support->ct_state_nat
-        && support->ct_orig_tuple) {
+        && support->ct_orig_tuple && support->ct_orig_tuple6) {
         return ct_state & CS_UNSUPPORTED_MASK ? OFPERR_OFPBMC_BAD_MASK : 0;
     }
 
@@ -4281,14 +4283,22 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
         return OFPERR_OFPBMC_BAD_MASK;
     }
 
-    if (!support->ct_orig_tuple &&
-        (MINIFLOW_GET_U8(flow, ct_nw_proto) ||
-         MINIFLOW_GET_U16(flow, ct_tp_src) ||
-         MINIFLOW_GET_U16(flow, ct_tp_dst) ||
-         MINIFLOW_GET_U32(flow, ct_nw_src) ||
-         MINIFLOW_GET_U32(flow, ct_nw_dst) ||
-         !ovs_u128_is_zero(MINIFLOW_GET_U128(flow, ct_ipv6_src)) ||
-         !ovs_u128_is_zero(MINIFLOW_GET_U128(flow, ct_ipv6_dst)))) {
+    if (!support->ct_orig_tuple && !support->ct_orig_tuple6
+        && (MINIFLOW_GET_U8(flow, ct_nw_proto)
+            || MINIFLOW_GET_U16(flow, ct_tp_src)
+            || MINIFLOW_GET_U16(flow, ct_tp_dst))) {
+        return OFPERR_OFPBMC_BAD_MASK;
+    }
+
+    if (!support->ct_orig_tuple
+        && (MINIFLOW_GET_U32(flow, ct_nw_src)
+            || MINIFLOW_GET_U32(flow, ct_nw_dst))) {
+        return OFPERR_OFPBMC_BAD_MASK;
+    }
+
+    if (!support->ct_orig_tuple6
+        && (!ovs_u128_is_zero(MINIFLOW_GET_U128(flow, ct_ipv6_src))
+            || !ovs_u128_is_zero(MINIFLOW_GET_U128(flow, ct_ipv6_dst)))) {
         return OFPERR_OFPBMC_BAD_MASK;
     }
 
@@ -4591,7 +4601,7 @@ packet_xlate_revert(struct ofproto *ofproto OVS_UNUSED,
 static void
 ofproto_dpif_xcache_execute(struct ofproto_dpif *ofproto,
                             struct xlate_cache *xcache,
-                            const struct dpif_flow_stats *stats)
+                            struct dpif_flow_stats *stats)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct xc_entry *entry;
@@ -4624,6 +4634,7 @@ ofproto_dpif_xcache_execute(struct ofproto_dpif *ofproto,
         case XC_GROUP:
         case XC_TNL_NEIGH:
         case XC_CONTROLLER:
+        case XC_TUNNEL_HEADER:
             xlate_push_stats_entry(entry, stats);
             break;
         default:
@@ -5240,11 +5251,6 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
     const struct ofproto_dpif *ofproto;
 
     struct ds ds = DS_EMPTY_INITIALIZER;
-    bool verbosity = false;
-
-    struct dpif_port dpif_port;
-    struct dpif_port_dump port_dump;
-    struct hmap portno_names;
 
     struct dpif_flow_dump *flow_dump;
     struct dpif_flow_dump_thread *flow_dump_thread;
@@ -5257,17 +5263,39 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
         return;
     }
 
-    if (argc > 2 && !strcmp(argv[1], "-m")) {
-        verbosity = true;
+    bool verbosity = false;
+    bool names = false;
+    bool set_names = false;
+    for (int i = 1; i < argc - 1; i++) {
+        if (!strcmp(argv[i], "-m")) {
+            verbosity = true;
+        } else if (!strcmp(argv[i], "--names")) {
+            names = true;
+            set_names = true;
+        } else if (!strcmp(argv[i], "--no-names")) {
+            names = false;
+            set_names = true;
+        }
+    }
+    if (!set_names) {
+        names = verbosity;
     }
 
-    hmap_init(&portno_names);
-    DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, ofproto->backer->dpif) {
-        odp_portno_names_set(&portno_names, dpif_port.port_no, dpif_port.name);
+    struct hmap *portno_names = NULL;
+    if (names) {
+        portno_names = xmalloc(sizeof *portno_names);
+        hmap_init(portno_names);
+
+        struct dpif_port dpif_port;
+        struct dpif_port_dump port_dump;
+        DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, ofproto->backer->dpif) {
+            odp_portno_names_set(portno_names, dpif_port.port_no,
+                                 dpif_port.name);
+        }
     }
 
     ds_init(&ds);
-    flow_dump = dpif_flow_dump_create(ofproto->backer->dpif, false);
+    flow_dump = dpif_flow_dump_create(ofproto->backer->dpif, false, NULL);
     flow_dump_thread = dpif_flow_dump_thread_create(flow_dump);
     while (dpif_flow_dump_next(flow_dump_thread, &f, 1)) {
         struct flow flow;
@@ -5282,11 +5310,11 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
             ds_put_cstr(&ds, " ");
         }
         odp_flow_format(f.key, f.key_len, f.mask, f.mask_len,
-                        &portno_names, &ds, verbosity);
+                        portno_names, &ds, verbosity);
         ds_put_cstr(&ds, ", ");
         dpif_flow_stats_format(&f.stats, &ds);
         ds_put_cstr(&ds, ", actions:");
-        format_odp_actions(&ds, f.actions, f.actions_len);
+        format_odp_actions(&ds, f.actions, f.actions_len, portno_names);
         ds_put_char(&ds, '\n');
     }
     dpif_flow_dump_thread_destroy(flow_dump_thread);
@@ -5299,8 +5327,11 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
     } else {
         unixctl_command_reply(conn, ds_cstr(&ds));
     }
-    odp_portno_names_destroy(&portno_names);
-    hmap_destroy(&portno_names);
+    if (portno_names) {
+        odp_portno_names_destroy(portno_names);
+        hmap_destroy(portno_names);
+        free(portno_names);
+    }
     ds_destroy(&ds);
 }
 
@@ -5415,7 +5446,7 @@ ofproto_unixctl_init(void)
                              NULL);
     unixctl_command_register("dpif/show-dp-features", "bridge", 1, 1,
                              ofproto_unixctl_dpif_show_dp_features, NULL);
-    unixctl_command_register("dpif/dump-flows", "[-m] bridge", 1, 2,
+    unixctl_command_register("dpif/dump-flows", "[-m] [--names | --no-nmaes] bridge", 1, INT_MAX,
                              ofproto_unixctl_dpif_dump_flows, NULL);
 
     unixctl_command_register("ofproto/tnl-push-pop", "[on]|[off]", 1, 1,

@@ -678,11 +678,8 @@ dp_packet_batch_size(const struct dp_packet_batch *batch)
     return batch->count;
 }
 
-/*
- * Clear 'batch' for refill. Use dp_packet_batch_refill() to add
- * packets back into the 'batch'.
- *
- * Return the original size of the 'batch'.  */
+/* Clear 'batch' for refill. Use dp_packet_batch_refill() to add
+ * packets back into the 'batch'. */
 static inline void
 dp_packet_batch_refill_init(struct dp_packet_batch *batch)
 {
@@ -739,6 +736,7 @@ dp_packet_batch_clone(struct dp_packet_batch *dst,
     DP_PACKET_BATCH_FOR_EACH (packet, src) {
         dp_packet_batch_add(dst, dp_packet_clone(packet));
     }
+    dst->trunc = src->trunc;
 }
 
 static inline void
