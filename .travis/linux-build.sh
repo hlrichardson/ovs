@@ -61,6 +61,7 @@ function install_dpdk()
         cd dpdk-stable-$1
     fi
     find ./ -type f | xargs sed -i 's/max-inline-insns-single=100/max-inline-insns-single=400/'
+    find ./ -type f | xargs sed -i 's/-Werror/-Werror -Wno-error=inline/'
     echo 'CONFIG_RTE_BUILD_FPIC=y' >>config/common_linuxapp
     sed -ri '/EXECENV_CFLAGS  = -pthread -fPIC/{s/$/\nelse ifeq ($(CONFIG_RTE_BUILD_FPIC),y)/;s/$/\nEXECENV_CFLAGS  = -pthread -fPIC/}' mk/exec-env/linuxapp/rte.vars.mk
     make config CC=gcc T=x86_64-native-linuxapp-gcc
@@ -80,7 +81,7 @@ fi
 
 if [ "$DPDK" ]; then
     if [ -z "$DPDK_VER" ]; then
-        DPDK_VER="16.11.2"
+        DPDK_VER="17.05.1"
     fi
     install_dpdk $DPDK_VER
     if [ "$CC" = "clang" ]; then

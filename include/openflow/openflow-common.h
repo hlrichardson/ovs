@@ -60,8 +60,7 @@
         extern int (*build_assert(void))[ sizeof(struct {               \
                     unsigned int build_assert_failed : (EXPR) ? 1 : -1; })]
 #else /* __cplusplus */
-#include <boost/static_assert.hpp>
-#define OFP_ASSERT BOOST_STATIC_ASSERT
+#define OFP_ASSERT(EXPR) static_assert(EXPR, "assertion failed")
 #endif /* __cplusplus */
 
 /* Version number:
@@ -467,6 +466,7 @@ enum ofp_header_type_namespaces {
     OFPHTN_IP_PROTO = 2,        /* ns_type is a IP protocol number. */
     OFPHTN_UDP_TCP_PORT = 3,    /* ns_type is a TCP or UDP port. */
     OFPHTN_IPV4_OPTION = 4,     /* ns_type is an IPv4 option number. */
+    OFPHTN_N_TYPES
 };
 
 #endif /* openflow/openflow-common.h */

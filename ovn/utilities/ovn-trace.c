@@ -34,6 +34,7 @@
 #include "ovn/actions.h"
 #include "ovn/expr.h"
 #include "ovn/lex.h"
+#include "ovn/lib/acl-log.h"
 #include "ovn/lib/logical-fields.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-dhcp.h"
@@ -947,7 +948,7 @@ ovntrace_port_lookup_by_name(const char *name)
 
     struct shash_node *node;
     SHASH_FOR_EACH (node, &ports) {
-        const struct ovntrace_port *port = node->data;
+        port = node->data;
 
         if (port->name2 && !strcmp(port->name2, name)) {
             if (match) {
@@ -959,9 +960,8 @@ ovntrace_port_lookup_by_name(const char *name)
     }
 
     if (uuid_is_partial_string(name) >= 4) {
-        struct shash_node *node;
         SHASH_FOR_EACH (node, &ports) {
-            const struct ovntrace_port *port = node->data;
+            port = node->data;
 
             struct uuid name_uuid;
             if (uuid_is_partial_match(&port->uuid, name)
@@ -1561,17 +1561,16 @@ execute_put_dhcp_opts(const struct ovnact_put_dhcp_opts *pdo,
     }
     ovntrace_node_append(super, OVNTRACE_NODE_MODIFY, "%s(%s)",
                          name, ds_cstr(&s));
-    ds_destroy(&s);
 
     struct mf_subfield dst = expr_resolve_field(&pdo->dst);
     if (!mf_is_register(dst.field->id)) {
         /* Format assignment. */
-        struct ds s = DS_EMPTY_INITIALIZER;
+        ds_clear(&s);
         expr_field_format(&pdo->dst, &s);
         ovntrace_node_append(super, OVNTRACE_NODE_MODIFY,
                              "%s = 1", ds_cstr(&s));
-        ds_destroy(&s);
     }
+    ds_destroy(&s);
 
     struct mf_subfield sf = expr_resolve_field(&pdo->dst);
     union mf_subvalue sv = { .u8_val = 1 };
@@ -1679,6 +1678,20 @@ execute_ct_nat(const struct ovnact_ct_nat *ct_nat,
     /* Upon return, we will trace the actions following the ct action in the
      * original table.  The pipeline forked, so we're using the original
      * flow, not ct_flow. */
+}
+
+static void
+execute_log(const struct ovnact_log *log, struct flow *uflow,
+            struct ovs_list *super)
+{
+    char *packet_str = flow_to_string(uflow, NULL);
+    ovntrace_node_append(super, OVNTRACE_NODE_TRANSFORMATION,
+                    "LOG: ACL name=%s, verdict=%s, severity=%s, packet=\"%s\"",
+                    log->name ? log->name : "<unnamed>",
+                    log_verdict_to_string(log->verdict),
+                    log_severity_to_string(log->severity),
+                    packet_str);
+    free(packet_str);
 }
 
 static void
@@ -1815,6 +1828,10 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
 
         case OVNACT_DNS_LOOKUP:
             execute_dns_lookup(ovnact_get_DNS_LOOKUP(a), uflow, super);
+            break;
+
+        case OVNACT_LOG:
+            execute_log(ovnact_get_LOG(a), uflow, super);
             break;
         }
 

@@ -972,7 +972,7 @@ dpif_netlink_rtnl_port_create_and_add(struct dpif_netlink *dpif,
     error = dpif_netlink_rtnl_port_create(netdev);
     if (error) {
         if (error != EOPNOTSUPP) {
-            VLOG_INFO_RL(&rl, "Failed to create %s with rtnetlink: %s",
+            VLOG_WARN_RL(&rl, "Failed to create %s with rtnetlink: %s",
                          netdev_get_name(netdev), ovs_strerror(error));
         }
         return error;
@@ -2848,13 +2848,13 @@ struct dpif_netlink_ct_dump_state {
 static int
 dpif_netlink_ct_dump_start(struct dpif *dpif OVS_UNUSED,
                            struct ct_dpif_dump_state **dump_,
-                           const uint16_t *zone)
+                           const uint16_t *zone, int *ptot_bkts)
 {
     struct dpif_netlink_ct_dump_state *dump;
     int err;
 
     dump = xzalloc(sizeof *dump);
-    err = nl_ct_dump_start(&dump->nl_ct_dump, zone);
+    err = nl_ct_dump_start(&dump->nl_ct_dump, zone, ptot_bkts);
     if (err) {
         free(dump);
         return err;

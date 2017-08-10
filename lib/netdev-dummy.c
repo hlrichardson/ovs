@@ -708,6 +708,12 @@ netdev_dummy_destruct(struct netdev *netdev_)
     ovs_mutex_unlock(&dummy_list_mutex);
 
     ovs_mutex_lock(&netdev->mutex);
+    if (netdev->rxq_pcap) {
+        fclose(netdev->rxq_pcap);
+    }
+    if (netdev->tx_pcap && netdev->tx_pcap != netdev->rxq_pcap) {
+        fclose(netdev->tx_pcap);
+    }
     dummy_packet_conn_close(&netdev->conn);
     netdev->conn.type = NONE;
 
@@ -1065,14 +1071,12 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
     struct dp_packet *packet;
     DP_PACKET_BATCH_FOR_EACH(packet, batch) {
         const void *buffer = dp_packet_data(packet);
-        size_t size = dp_packet_size(packet);
+        size_t size = dp_packet_get_send_len(packet);
 
         if (batch->packets[i]->packet_type != htonl(PT_ETH)) {
             error = EPFNOSUPPORT;
             break;
         }
-
-        size -= dp_packet_get_cutlen(packet);
 
         if (size < ETH_HEADER_LEN) {
             error = EMSGSIZE;
@@ -1102,11 +1106,11 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
 
         /* Reply to ARP requests for 'dev''s assigned IP address. */
         if (dev->address.s_addr) {
-            struct dp_packet packet;
+            struct dp_packet dp;
             struct flow flow;
 
-            dp_packet_use_const(&packet, buffer, size);
-            flow_extract(&packet, &flow);
+            dp_packet_use_const(&dp, buffer, size);
+            flow_extract(&dp, &flow);
             if (flow.dl_type == htons(ETH_TYPE_ARP)
                 && flow.nw_proto == ARP_OP_REQUEST
                 && flow.nw_dst == dev->address.s_addr) {
@@ -1118,10 +1122,10 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
         }
 
         if (dev->tx_pcap) {
-            struct dp_packet packet;
+            struct dp_packet dp;
 
-            dp_packet_use_const(&packet, buffer, size);
-            ovs_pcap_write(dev->tx_pcap, &packet);
+            dp_packet_use_const(&dp, buffer, size);
+            ovs_pcap_write(dev->tx_pcap, &dp);
             fflush(dev->tx_pcap);
         }
 
@@ -1478,8 +1482,10 @@ eth_from_flow(const char *s, size_t packet_size)
     }
 
     packet = dp_packet_new(0);
-    flow_compose(packet, &flow);
-    flow_compose_size(packet, &flow, packet_size);
+    if (!flow_compose(packet, &flow, packet_size)) {
+        dp_packet_delete(packet);
+        packet = NULL;
+    };
 
     ofpbuf_uninit(&odp_key);
     return packet;
@@ -1568,7 +1574,7 @@ netdev_dummy_receive(struct unixctl_conn *conn,
                     unixctl_command_reply_error(conn, "too small packet len");
                     goto exit;
                 }
-                i+=2;
+                i += 2;
             }
             /* Try parse 'argv[i]' as odp flow. */
             packet = eth_from_flow(flow_str, packet_size);

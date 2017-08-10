@@ -21,6 +21,10 @@
 #include "openvswitch/packets.h"
 #include "openvswitch/tun-metadata.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct ds;
 struct ofputil_port_map;
 struct mf_field;
@@ -41,6 +45,18 @@ struct match {
 
 /* Initializer for a "struct match" that matches every packet. */
 #define MATCH_CATCHALL_INITIALIZER { .flow = { .dl_type = 0 } }
+
+#define MATCH_SET_FIELD_MASKED(match, field, value, msk)      \
+    do {                                                      \
+        (match)->wc.masks.field = (msk);                      \
+        (match)->flow.field = (value) & (msk);                \
+    } while (0)
+
+#define MATCH_SET_FIELD_UINT8(match, field, value)            \
+    MATCH_SET_FIELD_MASKED(match, field, value, UINT8_MAX)
+
+#define MATCH_SET_FIELD_BE32(match, field, value)             \
+    MATCH_SET_FIELD_MASKED(match, field, value, OVS_BE32_MAX)
 
 void match_init(struct match *,
                 const struct flow *, const struct flow_wildcards *);
@@ -243,5 +259,9 @@ void minimatch_format(const struct minimatch *, const struct tun_table *,
                       struct ds *, int priority);
 char *minimatch_to_string(const struct minimatch *,
                           const struct ofputil_port_map *, int priority);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* match.h */
