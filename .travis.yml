@@ -1,4 +1,4 @@
-anguage: c
+language: c
 compiler:
   - gcc
   - clang
