@@ -1,4 +1,4 @@
-language: c
+anguage: c
 compiler:
   - gcc
   - clang
@@ -21,6 +21,7 @@ before_install: ./.travis/${TRAVIS_OS_NAME}-prepare.sh
 
 before_script: export PATH=$PATH:$HOME/bin
 
+dist: trusty
 sudo: false
 
 env:
